@@ -1,0 +1,23 @@
+{
+  "name": "Sketch organise symbols",
+  "$schema": "https://raw.githubusercontent.com/sketch-hq/SketchAPI/develop/docs/sketch-plugin-manifest-schema.json",
+  "icon": "icon.png",
+  "commands": [
+    {
+      "name": "Organise symbols",
+      "identifier": "sketch-organise-symbols.organise-symbols",
+      "script": "__organise-symbols.js"
+    }
+  ],
+  "menu": {
+    "title": "Organise symbols",
+    "items": [
+      "sketch-organise-symbols.organise-symbols"
+    ]
+  },
+  "version": "0.1.0",
+  "description": "Organise symbol masters based on their names",
+  "identifier": "sketch-organise-symbols",
+  "disableCocoaScriptPreprocessor": true,
+  "appcast": "https://raw.githubusercontent.com//master/.appcast.xml"
+}
