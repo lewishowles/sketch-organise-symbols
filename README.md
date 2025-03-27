@@ -8,19 +8,15 @@ While it may seem small, a messy Symbols screen makes things harder to follow wh
 
 ## How?
 
-To keep things simple, this plugin looks for all layers of type `SymbolMaster` on a page named "Symbols". We then organise those symbols alphabetically based on the groups in their layer names.
+To keep things simple, this plugin looks for all layers of type `SymbolMaster` on a page named "Symbols". We then organise those symbols, and the layers in the layer list, alphabetically.
 
-Each group, as defined by a forward-slash divider (`/`) will be placed in a column, with sub-groups placed one column to the right.
+Symbols are organised into groups, as defined by a forward-slash divider (`/`). New groups are placed to the right of existing groups, and "variants" of that group (e.g. symbols that share the same name, but a different final identifier such as `danger` and `warning`) are placed vertically.
 
 For example, with four items, `form/input/prefix/base`, `form/input/prefix/sm`, `form/input/suffix/base` and `button/primary`, a layout might look like:
 
 ```
-button    primary
-
-form      input        prefix      base
-                                   sm
-
-                       suffix      base
+button/primary        form/input/prefix/base        form/input/suffix/base
+                      form/input/prefix/sm
 ```
 
 ## Installation
