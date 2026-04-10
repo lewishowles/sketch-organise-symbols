@@ -133,10 +133,13 @@ __webpack_require__.r(__webpack_exports__);
 
 var sketch = __webpack_require__(/*! sketch */ "sketch");
 
-// The spacing between symbols within a group.
+// The vertical spacing between symbols within a group.
 var symbolSpacing = 100;
-// The multiple of symbolSpacing to use between groups.
+// The horizontal spacing used between groups.
 var groupSpacing = 200;
+
+// A reference to our page containing our symbols.
+var symbolsPage;
 function organizeSymbols() {
   var document = sketch.getSelectedDocument();
 
@@ -144,120 +147,27 @@ function organizeSymbols() {
   // it has been renamed, other than checking things like whether a page has
   // only symbols, or the most symbols, neither of which seems like a
   // guarantee. For now, we'll just look for a "Symbols" page.
-  var symbolsPage = document.pages.find(function (page) {
+  symbolsPage = document.pages.find(function (page) {
     return page.name === "Symbols";
   });
   if (!symbolsPage) {
-    sketch.UI.message("No page named \"Symbols\" found!");
+    sketch.UI.message("No page named \"Symbols\" found. For now, the plugin requires a page with the default name.");
     return;
   }
   var symbols = symbolsPage.layers.filter(function (layer) {
     return layer.type === "SymbolMaster";
   });
   if (!Array.isArray(symbols) || !symbols.length) {
-    sketch.UI.message("No symbols could be found to organise.");
+    sketch.UI.message("It doesn't look like there were any symbols to organise.");
     return;
   }
 
-  // Sort the layer list alphabetically before we begin.
+  // Start by sorting our layer list to keep both the layer list and canvas
+  // predictable.
   sortLayerList(symbols);
-  var hierarchy = determineSymbolHierarchy(symbols);
-
-  // Start positioning our symbols from the top-left corner.
-  positionSymbols(hierarchy, 0, 0);
-  sketch.UI.message("Symbols organised successfully!");
-}
-
-/**
- * Determine our symbol hierarchy, based on each new depth within the name being
- * a horizontal column. The resulting hierarchy can be used to procedurally
- * place symbols on a page.
- *
- * @param  {array}  symbolList
- *     The list of symbols to arrange into a hierarchy.
- */
-function determineSymbolHierarchy(symbolList) {
-  var hierarchy = {};
-  symbolList.forEach(function (symbol) {
-    var nameParts = symbol.name.split("/");
-    var currentLevel = hierarchy;
-    nameParts.forEach(function (part, index) {
-      // If this is the last part, we add the symbol to the parent level's
-      // array.
-      if (index === nameParts.length - 1) {
-        if (!currentLevel._symbols) {
-          currentLevel._symbols = [];
-        }
-        currentLevel._symbols.unshift(symbol);
-      } else if (!currentLevel[part]) {
-        currentLevel[part] = {};
-      }
-      currentLevel = currentLevel[part];
-    });
-  });
-  return hierarchy;
-}
-
-/**
- * Position the given symbols of a group, based on a starting position. Each
- * group represents a particular depth, and each item in a group is placed
- * horizontally, with each new depth within that group placed vertically. Both
- * the next group, and the next depth, are offset by the maximum width or height
- * of a symbol that we encounter.
- *
- * @param  {object}  group
- *     The collection of symbols to arrange
- * @param  {number}  startX
- *     The starting X position for the current group
- */
-function positionSymbols(group) {
-  var startX = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
-  if (_babel_runtime_helpers_typeof__WEBPACK_IMPORTED_MODULE_0___default()(group) !== "object") {
-    return {
-      x: startX,
-      maxHeight: 0
-    };
-  }
-  var x = startX;
-  var maxWidthForThisGroup = 0;
-  Object.keys(group).sort().forEach(function (subGroupName) {
-    var subGroup = group[subGroupName];
-    var isSymbolArray = Array.isArray(subGroup);
-    if (isSymbolArray) {
-      var symbolY = 0;
-
-      // When encountering symbols within a group, we place them
-      // horizontally.
-      subGroup.forEach(function (symbol) {
-        symbol.frame.x = x;
-        symbol.frame.y = symbolY;
-        symbolY += symbol.frame.height + symbolSpacing;
-
-        // Track the tallest symbol at this level, which allows us to
-        // properly place the next level.
-        if (symbol.frame.width > maxWidthForThisGroup) {
-          maxWidthForThisGroup = symbol.frame.width;
-        }
-      });
-    } else {
-      var newX = maxWidthForThisGroup > 0 ? x + maxWidthForThisGroup + groupSpacing : x;
-      var nextLevelResult = positionSymbols(subGroup, newX);
-
-      // Update the x position for subsequent groups.
-      x = nextLevelResult.x;
-
-      // Update the max width for this level.
-      if (nextLevelResult.maxWidth > maxWidthForThisGroup) {
-        maxWidthForThisGroup = nextLevelResult.maxWidth;
-      }
-    }
-  });
-
-  // Return the updated starting positions.
-  return {
-    x: x,
-    maxWidth: maxWidthForThisGroup
-  };
+  var groups = determineSymbolGroups();
+  positionSymbolGroups(groups);
+  sketch.UI.message("Symbols organised successfully.");
 }
 
 /**
@@ -267,15 +177,89 @@ function positionSymbols(group) {
  *     The layers to sort.
  */
 function sortLayerList(layers) {
-  // Sort layers alphabetically by name
+  // We reverse this sort because layers in the layer list have higher indexes
+  // the nearer to the top of the list they are.
   var sortedLayers = layers.sort(function (a, b) {
     return a.name.localeCompare(b.name);
   });
 
-  // Reorder layers in the layer list. The layer list has high indexes at the
-  // top, so we reverse our sorted layers.
-  sortedLayers.reverse().forEach(function (layer, index) {
-    layer.index = index;
+  // Re-order our layer list to match the sort.
+  sortedLayers.forEach(function (layer, index) {
+    return layer.index = index;
+  });
+}
+
+/**
+ * Group all symbols by their path, keeping sibling symbols together.
+ */
+function determineSymbolGroups() {
+  // We retrieve our symbols again because they've just been sorted.
+  var symbols = symbolsPage.layers.filter(function (layer) {
+    return layer.type === "SymbolMaster";
+  });
+  var groups = [];
+  symbols.forEach(function (symbol) {
+    var symbolNameParts = symbol.name.split("/");
+    var symbolPath = symbolNameParts.slice(0, -1).join("/");
+
+    // See if we can find an existing group for this symbol with the same
+    // path.
+    var group = groups.find(function (group) {
+      return group.path === symbolPath;
+    });
+    if (!group) {
+      group = {
+        path: symbolPath,
+        symbols: []
+      };
+      groups.push(group);
+    }
+    group.symbols.push({
+      name: symbol.name,
+      frame: symbol.frame
+    });
+  });
+  return groups;
+}
+
+/**
+ * Position our symbol groups, placing each new group in a new column.
+ *
+ * @param  {array}  groups
+ *     The collection of symbol groups to place.
+ */
+function positionSymbolGroups(groups) {
+  var x = 0;
+  groups.forEach(function (group) {
+    if (_babel_runtime_helpers_typeof__WEBPACK_IMPORTED_MODULE_0___default()(group) !== "object" || !Object.hasOwn(group, "symbols")) {
+      return;
+    }
+
+    // Keep track of our widest symbol to properly align the next group.
+    var maxWidthForThisGroup = 0;
+    // When placing symbols within a group, we organise them vertically,
+    // starting at y position 0.
+    var currentYPosition = 0;
+    group.symbols.forEach(function (symbol) {
+      // Position our symbol at our current horizontal x position.
+      symbol.frame.x = x;
+      // Position our symbol at our calculated y position, taking into
+      // account other symbols in this group.
+      symbol.frame.y = currentYPosition;
+      currentYPosition += symbol.frame.height + symbolSpacing;
+
+      // Track the widest symbol at this level, which allows us to
+      // properly place the next level.
+      if (symbol.frame.width > maxWidthForThisGroup) {
+        maxWidthForThisGroup = symbol.frame.width;
+      }
+    });
+
+    // Once we're finished with the group, we can update the x position
+    // ready for the next.
+    if (maxWidthForThisGroup > 0) {
+      x += maxWidthForThisGroup + groupSpacing;
+    }
   });
 }
 
