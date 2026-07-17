@@ -135,8 +135,12 @@ var sketch = __webpack_require__(/*! sketch */ "sketch");
 
 // The vertical spacing between symbols within a group.
 var symbolSpacing = 100;
-// The horizontal spacing used between groups.
-var groupSpacing = 200;
+// The horizontal spacing used between related paths and larger path branches.
+var groupSpacing = {
+  COMPONENT: 800,
+  RELATED: 200,
+  SECTION: 400
+};
 
 // A reference to our page containing our symbols.
 var symbolsPage;
@@ -177,8 +181,7 @@ function organizeSymbols() {
  *     The layers to sort.
  */
 function sortLayerList(layers) {
-  // We reverse this sort because layers in the layer list have higher indexes
-  // the nearer to the top of the list they are.
+  // Assign sorted indices explicitly so the layer list stays predictable.
   var sortedLayers = layers.sort(function (a, b) {
     return a.name.localeCompare(b.name);
   });
@@ -219,7 +222,38 @@ function determineSymbolGroups() {
       frame: symbol.frame
     });
   });
-  return groups;
+  return groups.sort(function (a, b) {
+    return a.path.localeCompare(b.path);
+  });
+}
+
+/**
+ * Chooses spacing that reflects how closely two symbol paths are related.
+ *
+ * @param  {string}  currentPath
+ *   The path of the group that has just been positioned.
+ * @param  {string}  nextPath
+ *   The path of the next group to position.
+ * @returns {number} The horizontal spacing between the groups.
+ */
+function getGroupSpacing(currentPath, nextPath) {
+  var currentParts = currentPath.split("/");
+  var nextParts = nextPath.split("/");
+  var comparisonLength = Math.min(currentParts.length, nextParts.length);
+  var sharedDepth = 0;
+  for (var index = 0; index < comparisonLength; index += 1) {
+    if (currentParts[index] !== nextParts[index]) {
+      break;
+    }
+    sharedDepth += 1;
+  }
+  if (sharedDepth === 0) {
+    return groupSpacing.COMPONENT;
+  }
+  if (sharedDepth === 1) {
+    return groupSpacing.SECTION;
+  }
+  return groupSpacing.RELATED;
 }
 
 /**
@@ -230,7 +264,7 @@ function determineSymbolGroups() {
  */
 function positionSymbolGroups(groups) {
   var x = 0;
-  groups.forEach(function (group) {
+  groups.forEach(function (group, groupIndex) {
     if (_babel_runtime_helpers_typeof__WEBPACK_IMPORTED_MODULE_0___default()(group) !== "object" || !Object.hasOwn(group, "symbols")) {
       return;
     }
@@ -257,8 +291,9 @@ function positionSymbolGroups(groups) {
 
     // Once we're finished with the group, we can update the x position
     // ready for the next.
-    if (maxWidthForThisGroup > 0) {
-      x += maxWidthForThisGroup + groupSpacing;
+    var nextGroup = groups[groupIndex + 1];
+    if (maxWidthForThisGroup > 0 && nextGroup) {
+      x += maxWidthForThisGroup + getGroupSpacing(group.path, nextGroup.path);
     }
   });
 }

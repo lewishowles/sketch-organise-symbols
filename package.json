@@ -16,8 +16,8 @@
 	},
 	"scripts": {
 		"build": "skpm-build",
+		"start": "bun run build && open -a 'Sketch Beta' sketch-organise-symbols.sketchplugin",
 		"watch": "skpm-build --watch",
-		"start": "skpm-build --watch --run",
 		"postinstall": "npm run build && skpm-link"
 	},
 	"devDependencies": {
